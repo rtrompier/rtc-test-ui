@@ -2,16 +2,18 @@
   display: block;
   height: 100%;
   video {
-    &.broadcaster {
-      bottom: 1rem;
-      position: fixed;
-      right: 1rem;
-      width: 30%;
-      z-index: 10;
-    }
-    &:not(.broadcaster) {
-      height: 100%;
-      width: 100%;
-    }
+      width: 300px;
+      height: 300px;
+    // &.broadcaster {
+    //   bottom: 1rem;
+    //   position: fixed;
+    //   right: 1rem;
+    //   width: 30%;
+    //   z-index: 10;
+    // }
+    // &:not(.broadcaster) {
+    //   height: 100%;
+    //   width: 100%;
+    // }
   }
 }

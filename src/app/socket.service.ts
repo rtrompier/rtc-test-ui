@@ -4,81 +4,101 @@ import * as io from 'socket.io-client';
 @Injectable({ providedIn: 'root' })
 export class SocketService {
     public socket;
-    private candidateConnection: RTCPeerConnection;
-    private peerConnections = {};
+    public clients: string[];
 
-
-    private myVideo: HTMLVideoElement;
-    private candidateVideo: HTMLVideoElement;
+    private connection = new RTCPeerConnection();
 
     constructor() {
         // this.socket = io('http://rtc.remy-trompier.ch:4000');
     }
 
-    public init(myVideo: HTMLVideoElement, candidateVideo: HTMLVideoElement) {
+    public init() {
         this.socket = io('http://localhost:4000');
-        this.socket.on('answer', this.answerHandler.bind(this));
-        this.socket.on('watcher', this.watcherHandler.bind(this));
-        this.socket.on('offer', this.offerHandler.bind(this));
+
         this.socket.on('connect', this.connectHandler.bind(this));
-        this.socket.on('broadcaster', this.connectHandler.bind(this));
 
-        this.myVideo = myVideo;
-        this.candidateVideo = candidateVideo;
-    }
+        this.socket.on('updateUserList', this.updateUserListHandler.bind(this));
 
-    private answerHandler(id, description) {
-        this.peerConnections[id].setRemoteDescription(description);
-    }
+        this.socket.on('callMade', this.callMadeHandler.bind(this));
 
-    private watcherHandler(id, description) {
-        const peerConnection = new RTCPeerConnection({
-            iceServers: [{
-                urls: ['stun:stun.l.google.com:19302']
-            }]
+        this.socket.on('addUser', (socketId) => {
+            console.log('addUser');
+            this.clients = this.clients.filter((cl) => cl !== socketId); // Remove user if already exist
+            this.clients.push(socketId);
+
+            this.createOffer();
         });
-        this.peerConnections[id] = peerConnection;
-        const stream = this.myVideo.srcObject as MediaStream;
-        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
 
-        peerConnection.createOffer()
-            .then(sdp => peerConnection.setLocalDescription(sdp))
-            .then(() => {
-                this.socket.emit('offer', id, peerConnection.localDescription);
-            });
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.socket.emit('candidate', id, event.candidate);
-            }
-        };
-    }
-
-    private offerHandler(id, description) {
-        this.candidateConnection = new RTCPeerConnection({
-            iceServers: [{
-                urls: ['stun:stun.l.google.com:19302']
-            }]
+        this.socket.on('removeUser', (socketId) => {
+            console.log('removeUser');
+            this.clients = this.clients.filter((cl) => cl !== socketId); // remove user
         });
-        this.candidateConnection.setRemoteDescription(description)
-            .then(() => this.candidateConnection.createAnswer())
-            .then(sdp => this.candidateConnection.setLocalDescription(sdp))
-            .then(() => {
-                this.socket.emit('answer', id, this.candidateConnection.localDescription);
+
+        this.socket.on('answerMade', (data) => {
+            console.log('answerMade');
+            this.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        });
+
+
+
+        this.connection.ontrack = this.onTrackHandler.bind(this);
+    }
+
+    public addStream(track: MediaStreamTrack, stream: MediaStream) {
+        this.connection.addTrack(track, stream);
+    }
+
+    public async createOffer() {
+        const offer = await this.connection.createOffer();
+        this.connection.setLocalDescription(offer);
+        // Push to remote user
+        if (this.clients) {
+            console.log('Call callUser');
+            this.socket.emit('callUser', {
+                offer,
+                to: this.clients[0],
             });
-        this.candidateConnection.ontrack = (event) => {
-            this.candidateVideo.srcObject = event.streams[0];
-        };
-        this.candidateConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                this.socket.emit('candidate', id, event.candidate);
-            }
-        };
+        }
     }
 
-    private connectHandler() {
-        this.socket.emit('watcher');
+    private connectHandler(e) {
+        console.log('connect', e);
     }
 
+    private updateUserListHandler(clients: string[]) {
+        console.log('updateUserList', clients);
+        this.clients = clients;
 
+        this.createOffer();
+    }
+
+    private endCall() {
+        const videos = document.getElementsByTagName('video');
+        for (let i = 0; i < videos.length; i++) {
+            videos[i].pause();
+        }
+
+        this.connection.close();
+    }
+
+    private error(err) {
+        this.endCall();
+    }
+
+    private async callMadeHandler(data) {
+        console.log('call made', data);
+        await this.connection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await this.connection.createAnswer();
+        await this.connection.setLocalDescription(new RTCSessionDescription(answer));
+        this.socket.emit('makeAnswer', {answer, to: data.socket});
+    }
+
+    private onTrackHandler(event: RTCTrackEvent) {
+        const vid = document.createElement('video');
+        vid.setAttribute('autoplay', 'true');
+        vid.setAttribute('playsinline', 'true');
+        vid.srcObject = event.streams[0];
+        document.getElementsByTagName('body')[0].appendChild(vid);
+    }
 
 }

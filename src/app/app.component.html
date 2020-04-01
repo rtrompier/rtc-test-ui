@@ -1,2 +1,1 @@
-<video #video autoplay playsinline></video>
-<video #videoClient autoplay playsinline></video>
+<video *ngFor="let v of videoStreams | keyvalue" [srcObject]="v.value" autoplay playsinline [class.broadcaster]="v.key === 'broadcaster'"></video>

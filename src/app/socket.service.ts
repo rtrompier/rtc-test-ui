@@ -32,7 +32,11 @@ export class SocketService {
     }
 
     private watcherHandler(id, description) {
-        const peerConnection = new RTCPeerConnection();
+        const peerConnection = new RTCPeerConnection({
+            iceServers: [{
+                urls: ['stun:stun.l.google.com:19302']
+            }]
+        });
         this.peerConnections[id] = peerConnection;
         const stream = this.myVideo.srcObject as MediaStream;
         stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
@@ -50,7 +54,11 @@ export class SocketService {
     }
 
     private offerHandler(id, description) {
-        this.candidateConnection = new RTCPeerConnection();
+        this.candidateConnection = new RTCPeerConnection({
+            iceServers: [{
+                urls: ['stun:stun.l.google.com:19302']
+            }]
+        });
         this.candidateConnection.setRemoteDescription(description)
             .then(() => this.candidateConnection.createAnswer())
             .then(sdp => this.candidateConnection.setLocalDescription(sdp))
